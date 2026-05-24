@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<title>StoryMap Demo</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f0f0;display:flex;justify-content:center;align-items:center;min-height:100vh}
+.wrap{display:flex;width:960px;height:580px;border-radius:12px;overflow:hidden;box-shadow:0 6px 30px rgba(0,0,0,0.15)}
+.sidebar{width:290px;min-width:290px;background:#fff;border-right:1px solid #e5e5e5;display:flex;flex-direction:column}
+.sh{padding:18px 16px 12px;border-bottom:1px solid #eee}
+.sh-title{font-size:14px;font-weight:700;color:#1a1a1a;margin-bottom:3px}
+.sh-sub{font-size:11px;color:#999}
+.slides{overflow-y:auto;flex:1}
+.slide{padding:12px 14px;border-bottom:1px solid #f2f2f2;cursor:pointer;border-left:3px solid transparent;transition:all .15s}
+.slide:hover{background:#f9f9f9}
+.slide.active{background:#f0faf6;border-left-color:#1D9E75}
+.slide-top{font-size:13px;font-weight:600;color:#1a1a1a;display:flex;align-items:center;gap:7px}
+.dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.slide-place{font-size:11px;color:#aaa;margin-top:2px;padding-left:16px}
+.slide-text{font-size:12px;color:#555;margin-top:8px;line-height:1.55;display:none}
+.slide.active .slide-text{display:block}
+.maparea{flex:1;position:relative}
+#map{width:100%;height:100%}
+.nav{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:1000}
+.btn{background:#fff;border:1px solid #ccc;border-radius:8px;padding:7px 16px;font-size:12px;cursor:pointer;font-family:inherit;box-shadow:0 2px 6px rgba(0,0,0,0.1)}
+.btn:hover{background:#f5f5f5}
+.btn:disabled{opacity:.4;cursor:default}
+.counter{position:absolute;top:12px;right:12px;background:rgba(255,255,255,.92);border:1px solid #ddd;border-radius:8px;padding:4px 10px;font-size:11px;color:#666;z-index:1000}
+.logo{position:absolute;bottom:50px;right:12px;font-size:10px;color:rgba(0,0,0,.35);z-index:1000}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="sidebar">
+    <div class="sh">
+      <div class="sh-title">Η γειτονιά μας, οι ιστορίες μας</div>
+      <div class="sh-sub">Τάξη Β2 · 5 μαθητές · 10 τόποι</div>
+    </div>
+    <div class="slides" id="slides"></div>
+  </div>
+  <div class="maparea">
+    <div id="map"></div>
+    <div class="counter" id="counter">1 / 5</div>
+    <div class="nav">
+      <button class="btn" id="prevBtn" onclick="navigate(-1)" disabled>← Προηγ.</button>
+      <button class="btn" id="nextBtn" onclick="navigate(1)">Επόμ. →</button>
+    </div>
+    <div class="logo">StoryMapJS · demo για παρουσίαση</div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const stories = [
+  {
+    name:'Μαρία', color:'#1D9E75', flag:'🇦🇱', country:'Αλβανία',
+    title:'Η παλιά αγορά του Γκιροκάστρα',
+    place:'Gjirokastër, Αλβανία',
+    text:'Η γιαγιά μου μεγάλωσε δίπλα στο παλιό παζάρι. Κάθε Σάββατο πουλούσαν χειροποίητα χαλιά. Τώρα είναι μνημείο UNESCO.',
+    lat:40.075, lng:20.139, zoom:6
+  },
+  {
+    name:'Αμίν', color:'#378ADD', flag:'🇸🇾', country:'Συρία',
+    title:'Η παλαιά αγορά της Δαμασκού',
+    place:'Δαμασκός, Συρία',
+    text:'Ο μπαμπάς μου ήταν κεραμίστας στο Αλ-Χαμιντίγιε. Δεν υπάρχει πια, αλλά έχουμε φωτογραφίες.',
+    lat:33.51, lng:36.29, zoom:5
+  },
+  {
+    name:'Ελένα', color:'#D85A30', flag:'🇷🇴', country:'Ρουμανία',
+    title:'Η ξύλινη εκκλησία του χωριού μας',
+    place:'Μαραμούρες, Ρουμανία',
+    text:'Το χωριό μου έχει εκκλησία από τον 17ο αιώνα. Όλοι οι παππούδες μου βαπτίστηκαν εκεί.',
+    lat:47.66, lng:23.57, zoom:6
+  },
+  {
+    name:'Κάριμ', color:'#BA7517', flag:'🇵🇰', country:'Πακιστάν',
+    title:'Το τέμενος Badshahi της Λαχώρης',
+    place:'Λαχώρη, Πακιστάν',
+    text:'Ο πατέρας μου μού έδειξε φωτογραφίες από μικρό. Είναι από τα μεγαλύτερα τεμένη του κόσμου.',
+    lat:31.588, lng:74.31, zoom:5
+  },
+  {
+    name:'Λέα', color:'#7F77DD', flag:'🇧🇬', country:'Βουλγαρία',
+    title:'Η εκκλησία της Βοϊάνα',
+    place:'Σόφια, Βουλγαρία',
+    text:'Πηγαίναμε κάθε καλοκαίρι με τη μαμά. Τοιχογραφίες 13ου αιώνα — μνημείο UNESCO.',
+    lat:42.64, lng:23.26, zoom:7
+  }
+];
+
+const SCHOOL = { lat:40.6401, lng:22.9444 }; // Θεσσαλονίκη
+
+const map = L.map('map', { zoomControl:true, attributionControl:false });
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+let current = 0;
+let currentLine = null;
+let currentMarker = null;
+let schoolMarker = null;
+
+function makeIcon(color, size=14) {
+  return L.divIcon({
+    className:'',
+    html:`<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:2.5px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3)"></div>`,
+    iconSize:[size,size], iconAnchor:[size/2,size/2]
+  });
+}
+
+function makeSchoolIcon() {
+  return L.divIcon({
+    className:'',
+    html:`<div style="background:#1D9E75;color:white;font-size:11px;padding:4px 8px;border-radius:8px;font-family:Arial;font-weight:700;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.25)">🏫 Σχολείο</div>`,
+    iconAnchor:[40,12]
+  });
+}
+
+function goTo(i) {
+  current = i;
+  const s = stories[i];
+
+  if(currentLine) map.removeLayer(currentLine);
+  if(currentMarker) map.removeLayer(currentMarker);
+  if(schoolMarker) map.removeLayer(schoolMarker);
+
+  currentLine = L.polyline(
+    [[s.lat, s.lng],[SCHOOL.lat, SCHOOL.lng]],
+    {color: s.color, weight:2.5, dashArray:'6,5', opacity:0.8}
+  ).addTo(map);
+
+  currentMarker = L.marker([s.lat, s.lng], {icon: makeIcon(s.color, 16)})
+    .addTo(map)
+    .bindPopup(`<div style="font-size:13px">
+      <div style="font-size:20px;margin-bottom:4px">${s.flag}</div>
+      <strong>${s.title}</strong><br>
+      <span style="color:#999;font-size:11px">${s.place}</span><br><br>
+      <span style="font-size:12px;color:#444">${s.text}</span>
+    </div>`, {maxWidth:220})
+    .openPopup();
+
+  schoolMarker = L.marker([SCHOOL.lat, SCHOOL.lng], {icon: makeSchoolIcon()}).addTo(map);
+
+  const bounds = L.latLngBounds([[s.lat,s.lng],[SCHOOL.lat,SCHOOL.lng]]);
+  map.fitBounds(bounds, {padding:[60,60]});
+
+  renderSlides();
+  document.getElementById('counter').textContent = `${i+1} / ${stories.length}`;
+  document.getElementById('prevBtn').disabled = i===0;
+  document.getElementById('nextBtn').disabled = i===stories.length-1;
+}
+
+function renderSlides() {
+  document.getElementById('slides').innerHTML = stories.map((s,i)=>`
+    <div class="slide ${i===current?'active':''}" onclick="goTo(${i})">
+      <div class="slide-top">
+        <span class="dot" style="background:${s.color}"></span>
+        ${s.flag} ${s.name}
+      </div>
+      <div class="slide-place">${s.country} · ${s.title}</div>
+      <div class="slide-text">${s.text}</div>
+    </div>
+  `).join('');
+}
+
+function navigate(d){ goTo(Math.max(0,Math.min(stories.length-1,current+d))); }
+
+goTo(0);
+</script>
+</body>
+</html>
